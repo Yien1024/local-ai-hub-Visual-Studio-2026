@@ -1,0 +1,110 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    VSIX 项目（VS 2026 Insiders 18.11 / Dev18）—— 纯离线构建。
+
+    为什么没有任何 PackageReference：
+      本机网络当前不可达 nuget.org（NU1301 / TLS 握手失败），NuGet 全局缓存里
+      也没有 VSSDK.BuildTools。所以这里全部改用本机 VS 安装目录里的真实 DLL 直接
+      Reference，VSIX 由 scripts\pack.ps1 手工打包（zip + [Content_Types].xml）。
+      这条路线已实测可编译（0 error）。
+
+    容易踩的坑（实测）：
+      Microsoft.VisualStudio.Shell.15.0.dll 要求 Microsoft.VisualStudio.Threading
+      程序集版本 18.7.0.0 —— 必须用 PublicAssemblies\Microsoft.VisualStudio.Threading.17.x\
+      下那份；用别处的 17.14 会 CS1705 编译失败。
+
+    设计约束（前车之鉴：某第三方扩展在 VS2026 里卡死）：
+      1. 所有 HTTP 在线程池上跑，绝不在 UI 线程做网络。
+      2. 所有入口 try/catch，异常写 %TEMP%\LocalAIHub\ui-error.log，绝不冒泡进 IDE。
+      3. 不注册 MEF 组件，不设 AllowsBackgroundLoad —— 包只在用户点开工具窗口时才加载。
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <OutputType>Library</OutputType>
+    <RootNamespace>LocalAIHub</RootNamespace>
+    <AssemblyName>LocalAIHub</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Product>Local AI Hub for Visual Studio</Product>
+    <Version>1.0.0</Version>
+    <Company>LocalAIHub</Company>
+    <Copyright>MIT</Copyright>
+    <RestorePackages>false</RestorePackages>
+    <VsInstall>E:\Visual Studio 2026\chanpin</VsInstall>
+    <VsIdeDir>$(VsInstall)\Common7\IDE</VsIdeDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- VS SDK：直接指向本机安装目录，Private=false（不复制进 VSIX，VS 进程里本来就有） -->
+    <Reference Include="Microsoft.VisualStudio.Shell.15.0">
+      <HintPath>$(VsIdeDir)\PublicAssemblies\Microsoft.VisualStudio.Shell.15.0.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- VS 2026 里 IVsWindowFrame / SVsShell 等类型被转发到这个 18.0 程序集 -->
+    <Reference Include="Microsoft.VisualStudio.Interop">
+      <HintPath>$(VsIdeDir)\PublicAssemblies\Microsoft.VisualStudio.Interop.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Microsoft.VisualStudio.Shell.Framework">
+      <HintPath>$(VsIdeDir)\PublicAssemblies\Microsoft.VisualStudio.Shell.Framework.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Microsoft.VisualStudio.Shell.Interop">
+      <HintPath>$(VsIdeDir)\PublicAssemblies\Microsoft.VisualStudio.Shell.Interop.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Microsoft.VisualStudio.Shell.Interop.8.0">
+      <HintPath>$(VsIdeDir)\PublicAssemblies\Microsoft.VisualStudio.Shell.Interop.8.0.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Microsoft.VisualStudio.OLE.Interop">
+      <HintPath>$(VsIdeDir)\PublicAssemblies\Microsoft.VisualStudio.OLE.Interop.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Microsoft.VisualStudio.Imaging.Interop.14.0.DesignTime">
+      <HintPath>$(VsIdeDir)\PublicAssemblies\Microsoft.VisualStudio.Imaging.Interop.14.0.DesignTime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Microsoft.VisualStudio.Utilities">
+      <HintPath>$(VsIdeDir)\Microsoft.VisualStudio.Utilities.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Microsoft.VisualStudio.Imaging">
+      <HintPath>$(VsIdeDir)\Microsoft.VisualStudio.Imaging.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- ⚠️ 必须用 .17.x 目录下这份（程序集 18.7.0.0），否则 CS1705 -->
+    <Reference Include="Microsoft.VisualStudio.Threading">
+      <HintPath>$(VsIdeDir)\PublicAssemblies\Microsoft.VisualStudio.Threading.17.x\Microsoft.VisualStudio.Threading.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Microsoft.VisualStudio.Validation">
+      <HintPath>$(VsIdeDir)\PrivateAssemblies\Microsoft.VisualStudio.Validation.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System.ComponentModel.Composition" />
+    <Reference Include="System.Design" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Core 的 dll 要一起进 VSIX，所以这里 Private=true -->
+    <ProjectReference Include="..\LocalAIHub.Core\LocalAIHub.Core.csproj">
+      <Private>true</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="LocalAIHub.pkgdef" />
+    <None Include="source.extension.vsixmanifest" />
+  </ItemGroup>
+
+</Project>

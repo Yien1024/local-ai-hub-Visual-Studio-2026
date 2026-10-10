@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    纯逻辑层（离线可构建，零 NuGet 依赖）。
+
+    为什么是 net472 + 零第三方包：
+      本机网络当前不可达 nuget.org（NU1301 / TLS 握手失败），NuGet 全局缓存里
+      也没有 System.Text.Json / VSSDK.BuildTools。为了"今天就能编译出东西"，
+      这一层刻意不引用任何第三方程序集：JSON 用手写的 Json.cs。
+    这样它同时能被 VSIX(net472) 和 测试宿主(net472 exe) 引用。
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>LocalAIHub.Core</RootNamespace>
+    <AssemblyName>LocalAIHub.Core</AssemblyName>
+    <Nullable>disable</Nullable>
+    <RestorePackages>false</RestorePackages>
+    <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+
+</Project>

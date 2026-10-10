@@ -1,0 +1,40 @@
+# Build output
+bin/
+obj/
+dist/_staging/
+dist/_staging_old/
+dist/_old-repro.vsix
+tools/*/bin/
+tools/*/obj/
+src/*/bin/
+src/*/obj/
+
+# Test / probe scratch
+tools/CoreTests/bin/Debug/net472/_byom_test/
+tools/IlProbe/bin/Debug/net472/_vsixprobe/
+**/_vsixprobe/
+**/_byom_test/
+
+# Runtime logs and local state
+*.log
+!docs/*.log
+tools/pull-27b.log
+*.bak-localaihub-*
+
+# Bench raw data (regenerable, ~0.5 MB) and scratch
+bench/_tmp/
+bench/_cstest/
+bench/results.json
+
+# Editor / OS
+.vs/
+*.user
+*.suo
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# NuGet (this project deliberately has zero package references,
+# but restore may still drop a lock file)
+packages/
+*.nupkg

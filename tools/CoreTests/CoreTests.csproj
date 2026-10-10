@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    离线自测宿主：net472 控制台程序，引 Core，不需要任何 NuGet 包。
+    跑法：  dotnet build 之后执行  bin\Debug\net472\CoreTests.exe
+    目的：先把"逻辑对不对"证清楚，再把它塞进 VS —— 上一轮第三方扩展
+    在 VS2026 里卡死的教训就是不先证明就装。
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>LocalAIHub.CoreTests</RootNamespace>
+    <AssemblyName>CoreTests</AssemblyName>
+    <Nullable>disable</Nullable>
+    <RestorePackages>false</RestorePackages>
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\LocalAIHub.Core\LocalAIHub.Core.csproj" />
+  </ItemGroup>
+
+</Project>

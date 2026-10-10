@@ -1,0 +1,43 @@
+// LocalAIHub.pkgdef —— 手工注册（本机没有 VSSDK 的 VSCT 编译器，所以不用 .vsct）
+//
+// ⚠️ 本文件必须带 BOM（UTF-8 EF BB BF），否则 VS 可能静默不读 —— 打包脚本会检查。
+//
+// GUID 说明：
+//   Package      {8f2a1c74-3b6d-4e51-9a0c-6d7e5b4a3120}  ← 与 PackageGuidString 一致
+//   CmdSet       {6d5b2e91-8a41-4c73-b0e6-1f9a3c7d2b58}  ← 与 CommandSetGuidString 一致
+//   ToolWindow   {3c9a7e15-52d8-4f61-ab34-7e0b9c1d8f26}  ← 与 ToolWindowGuidString 一致
+
+[$RootKey$\Packages\{8f2a1c74-3b6d-4e51-9a0c-6d7e5b4a3120}]
+@="Local AI Hub"
+"Company"="LocalAIHub"
+"MinEdition"="Community"
+"InprocServer32"="$PackageFolder$\LocalAIHub.dll"
+
+[$RootKey$\Packages\{8f2a1c74-3b6d-4e51-9a0c-6d7e5b4a3120}\ToolWindows\{3c9a7e15-52d8-4f61-ab34-7e0b9c1d8f26}]
+@="Local AI Hub"
+
+[$RootKey$\Menus]
+"{6d5b2e91-8a41-4c73-b0e6-1f9a3c7d2b58}"="Local AI Hub"
+
+; ---- 命令：Tools 菜单下的两个入口 ----
+; 0x100 = cmdidOpenHub，0x101 = cmdidOpenSearch
+[$RootKey$\Menus\{6d5b2e91-8a41-4c73-b0e6-1f9a3c7d2b58}]
+"1"="Local AI Hub"
+
+[$RootKey$\Menus\{6d5b2e91-8a41-4c73-b0e6-1f9a3c7d2b58}\1]
+"0x100"="本地大模型对话(&L)..."
+"0x101"="联网搜索(&S)..."
+
+[$RootKey$\Commands\{6d5b2e91-8a41-4c73-b0e6-1f9a3c7d2b58}]
+"0x100"=dword:00000000
+"0x101"=dword:00000000
+
+; 放进"工具"菜单（Tools menu = {5efc7975-14bc-11cf-9b2b-00aa00573819}:1286）
+; 以及"视图 → 其他窗口"（View > Other Windows = {5efc7975-14bc-11cf-9b2b-00aa00573819}:12334）
+[$RootKey$\CommandPlacements]
+"{6d5b2e91-8a41-4c73-b0e6-1f9a3c7d2b58}:256"="{5efc7975-14bc-11cf-9b2b-00aa00573819}:1286"
+"{6d5b2e91-8a41-4c73-b0e6-1f9a3c7d2b58}:257"="{5efc7975-14bc-11cf-9b2b-00aa00573819}:12334"
+
+; ---- 设置页（在"工具 → 选项 → Local AI Hub"下）----
+[$RootKey$\Tools\Options\LocalAIHub]
+@="Local AI Hub"

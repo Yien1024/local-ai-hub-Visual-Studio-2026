@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
+  <Metadata>
+    <Identity Id="LocalAIHub.9f1c4a02-7d3e-4b18-9c55-0a7f2e5b81d4" Version="1.0.0" Language="zh-CN" Publisher="LocalAIHub" />
+    <DisplayName>Local AI Hub (本地大模型 + 联网搜索)</DisplayName>
+    <Description xml:space="preserve">在 Visual Studio 2026 里直接使用本机 Ollama 模型：流式对话、联网搜索注入（Bing/360/百度，零 API key）、模型管理（拉取/删除/常驻）、一键写入 Copilot BYOM 配置让 Copilot Chat 也能用本地模型。不依赖 GitHub Copilot 云端，不需要 MCP。</Description>
+    <MoreInfo>https://github.com/Yien1024/qwen3-coder-arc-vs2026</MoreInfo>
+    <Tags>ollama, llm, local, ai, chat, web-search, byom, qwen</Tags>
+  </Metadata>
+  <Installation InstalledByMsi="false">
+    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[18.0,19.0)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+    <InstallationTarget Id="Microsoft.VisualStudio.Pro" Version="[18.0,19.0)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+    <InstallationTarget Id="Microsoft.VisualStudio.Enterprise" Version="[18.0,19.0)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+  </Installation>
+  <!--
+    Dependencies 里保留 .NET Framework 4.7.2 的下限（devenv 本身就是 net472 宿主）。
+    这里刻意没有 <Prerequisites> 段 —— 见下面的分析。
+  -->
+  <Dependencies>
+    <Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" Version="[4.7.2,)" />
+  </Dependencies>
+  <!--
+    ⚠️ 不要加回 <Prerequisites>。
+
+    实测证据（tools\IlProbe，用 VSIXInstaller 自己加载的引擎实现做逐项二分）：
+      · 保留 <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[18.0,19.0)" .../>
+        时，引擎构造 InstallableExtensionImpl 抛 InvalidExtensionPackageException
+        —— 也就是用户在 VSIXInstaller 日志里看到的"此文件不是有效的 VSIX 包"。
+      · 仅删掉这 3 行、其它一字不改，引擎立刻接受（R6 变体）。
+      · 而 VS 自带的 PackageManifestSchema.xsd 是**允许** Prerequisites 的（用它校验能过），
+        所以这个坑只有真的让引擎解析才会暴露。
+
+    版本兼容性由上面的 <InstallationTarget Version="[18.0,19.0)"> 负责，已经够用。
+  -->
+  <Assets>
+    <Asset Type="Microsoft.VisualStudio.VsPackage" Path="LocalAIHub.pkgdef" />
+  </Assets>
+</PackageManifest>
