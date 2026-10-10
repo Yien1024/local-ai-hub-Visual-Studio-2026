@@ -1,0 +1,18 @@
+# Normalize line endings so the repo stays consistent across platforms.
+# The warnings on commit ("LF will be replaced by CRLF") come from Windows git's
+# autocrlf default; being explicit avoids noisy diffs for contributors.
+* text=auto eol=lf
+
+# Scripts that are only ever run by Windows PowerShell: keep CRLF.
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary artifacts must never be line-ending converted.
+*.vsix binary
+*.png binary
+*.dll binary
+*.pdb binary
+
+# PowerShell scripts here must stay ASCII-readable; mark them as text so diffs work.
+*.pkgdef text
