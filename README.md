@@ -1,217 +1,234 @@
-# Local AI Hub —— Visual Studio 2026 的本地大模型插件
+# Local AI Hub for Visual Studio 2026
 
-在 VS 2026 里直接使用本机 **Ollama** 模型，并且**真的能联网搜索**，还能顺手管理模型、把模型注册进 Copilot 的自带模型（BYOM）。
+**English** · [中文文档](README.zh-CN.md)
 
-**零 NuGet 依赖 · 零 API key · 纯离线可构建 · 不依赖 GitHub Copilot 云端**
+Use local **Ollama** models directly inside Visual Studio 2026 — with **web search that actually works**, model management, and one-click registration into Copilot's bring-your-own-model (BYOM) list.
+
+**Zero NuGet dependencies · Zero API keys · Builds fully offline · Does not depend on the GitHub Copilot cloud**
 
 ```
-工具 → 本地大模型对话(&L)...
+Tools → 本地大模型对话(&L)...   (Local model chat)
 ```
+
+> 💡 **Why this exists**: on VS 2026 you can point Copilot at a local Ollama model, but
+> you cannot make it search the web (MCP servers stay disabled in this build), and the
+> BYOM config silently drops requests if one field is wrong. This extension is a
+> self-contained local-model client instead of a Copilot add-on.
 
 ---
 
-## 为什么需要它
+## Why you need it
 
-VS 2026 的 Copilot 有 "BYOM"（自带模型）可以接本地 Ollama，但实测有三个绕不过去的问题：
+VS 2026's Copilot supports "BYOM" (bring your own model) for local Ollama. In practice three problems block the obvious setup:
 
-| 问题 | 实测证据 |
+| Problem | Measured evidence |
 |---|---|
-| **Copilot 的 MCP 装不上** | 自研 MCP 服务器状态恒为 `UserDisabled`，连微软自带的 Microsoft Learn MCP 也是；`EnabledMcpServers` 恒空、设置项被 `visibleWhen:'false'` 隐藏。12 条尝试路径全部失败 |
-| **BYOM 配错一个字段就静默失效** | `CustomURL` 为 null 时，模型出现在选择器里、VS 也报 `1 usable provider`，但发消息**请求直接消失** —— 不报错、不产生任何 HTTP 请求 |
-| **本地模型不会联网** | 模型知识有截止日期；且 Copilot 面板本身仍依赖 `api.githubcopilot.com` 初始化，受限网络下一直转圈，本地模型一个请求都收不到 |
+| **Copilot's MCP servers won't enable** | A self-authored MCP server stays `UserDisabled`, and so does Microsoft's own Microsoft Learn MCP. `EnabledMcpServers` stays empty and the setting is hidden behind `visibleWhen:'false'`. All 12 workarounds failed. |
+| **One wrong BYOM field silently kills every request** | With `CustomURL` null, the model appears in the picker and VS reports `1 usable provider`, but sending a message **produces no request at all** — no error, no HTTP traffic. |
+| **Local models can't search** | Model knowledge has a cutoff. Worse, the Copilot pane itself still needs `api.githubcopilot.com` to initialise, so on restricted networks it spins forever while your local model receives nothing. |
 
-这个插件把三件事一起解决：**它自己就是一个完整的本地模型客户端**（不依赖 Copilot 云端），联网能力做在里面（不依赖 MCP），并顺手帮你把 BYOM 配置写对。
-
----
-
-## 功能
-
-- **流式对话**：本机 Ollama 模型，逐字输出，可随时停止
-- **联网搜索**：Bing（cn 节点）→ 360 → 百度 自动回退，**零 API key、零费用**
-  - 按问题内容自动判定该不该搜（纯概念 / 纯代码 / 延续性追问不搜，省 ~11 秒和 ~1500 prompt token）
-  - 检索词优先抽**报错原文**而不是整句话（实测：整句 → 教程首页；抽原文 → 5/5 正解页）
-  - 注入前过**相关性闸门**（内容农场直接剔除，低于阈值不注入）
-  - 搜不到就明确告诉模型"没搜到"，而不是硬塞垃圾
-  - 注入块带**时间锚点 + `[S1]` 来源编号 + 允许弃用无关结果**的规则
-  - 抓正文有**硬超时**（`HttpClient` 的 timeout 不覆盖 DNS 解析，实测有页面挂 145 秒）
-- **模型管理**：列表 / 拉取（带进度和速度）/ 删除 / 预加载常驻显存 / 从显存卸载
-- **显存体检**：显示 `ollama ps` 的占用，`100% GPU` 还是 CPU 混合一目了然
-- **BYOM 一键注册**：把本机模型写进 VS Copilot 的自带模型配置（写前自动备份）
-- **搜索测试**：不经过模型，直接看每个引擎返回了什么、闸门留下了什么
-- **运行日志面板**：每一步决策都能看到（跳过联网的理由、检索词、引擎、保留条数）
-- **手工控制**：消息里写 `[search]` 强制联网、`[no-search]` 强制不联网
+This extension solves all three: **it is a complete local-model client of its own** (no Copilot cloud needed), the web search lives inside it (no MCP needed), and it writes the BYOM config correctly for you.
 
 ---
 
-## 安装
+## Features
 
-### 前置
+- **Streaming chat** with any local Ollama model, with a stop button
+- **Web search**: Bing (China node) → 360 → Baidu automatic fallback, **no API keys, no cost**
+  - Auto-decides whether a question needs the web (pure concepts / pure coding / follow-ups skip it, saving ~11 s and ~1500 prompt tokens)
+  - Extracts the **verbatim error string** as the query instead of the whole sentence (measured: whole sentence → tutorial homepages; verbatim error → 5/5 on-topic fixes)
+  - Runs a **relevance gate** before injection (content farms dropped, low scores not injected)
+  - When nothing relevant is found it tells the model so, instead of stuffing noise into the prompt
+  - Injected block carries a **time anchor**, `[S1]` source numbers, and permission to ignore irrelevant results
+  - Page fetching has a **hard wall-clock deadline** (`HttpClient`'s timeout does not cover DNS resolution — one page hung for 145 s in testing)
+- **Model management**: list / pull (with progress and speed) / delete / preload and keep resident / unload from VRAM
+- **VRAM check**: shows `ollama ps` placement — whether it is `100% GPU` or spilling to CPU
+- **BYOM registration**: writes your local models into Copilot's bring-your-own-model config (auto-backup before writing)
+- **Search test**: exercise the search chain without involving the model
+- **Run log panel**: every decision is visible (why search was skipped, the query, the engine, how many results survived)
+- **Manual control**: put `[search]` or `[no-search]` anywhere in a message
 
-- Windows + **Visual Studio 2026**（Insiders 18.11 上开发验证；manifest 声明 `[18.0,19.0)`）
-- **Ollama** 正在运行（`ollama list` 有输出即可）
-- 至少一个模型，例如 `ollama pull qwen3-coder:30b`
+---
 
-### 装插件
+## Install
 
-1. **完全退出 Visual Studio**（不是最小化 —— `devenv.exe` / `copilot.exe` 会阻塞安装）
-2. 双击 `dist/LocalAIHub-1.0.0.vsix`（会弹 UAC，点"是"）
-3. 重启 VS → **工具 → 本地大模型对话(&L)...**
-   （也可从 **视图 → 其他窗口 → Local AI Hub** 打开）
+### Prerequisites
 
-命令行等价写法：
+- Windows + **Visual Studio 2026** (developed and verified on Insiders 18.11; the manifest declares `[18.0,19.0)`)
+- **Ollama** running (`ollama list` returns something)
+- At least one model, e.g. `ollama pull qwen3-coder:30b`
+
+### Steps
+
+1. **Fully exit Visual Studio** — not minimized. `devenv.exe` / `copilot.exe` block the install.
+2. Double-click `dist/LocalAIHub-1.0.0.vsix` and approve the UAC prompt.
+3. Restart VS → **Tools → 本地大模型对话(&L)...**
+   (also available under **View → Other Windows → Local AI Hub**)
+
+Command-line equivalent:
 
 ```powershell
-& "<VS安装目录>\Common7\IDE\VSIXInstaller.exe" /quiet /instanceIds:<实例ID> "dist\LocalAIHub-1.0.0.vsix"
+& "<VS install dir>\Common7\IDE\VSIXInstaller.exe" /quiet /instanceIds:<instance id> "dist\LocalAIHub-1.0.0.vsix"
 ```
 
-> 装到 `Program Files` 需要管理员权限，**UAC 必须点"是"**。
-> 如果报 `BlockingProcessesException`，就是 VS 还开着。
+> Installing into `Program Files` needs administrator rights, so **the UAC prompt must be approved**.
+> If you get `BlockingProcessesException`, Visual Studio is still running.
 
-### 卸载
+### Uninstall
 
 ```powershell
-& "<VS安装目录>\Common7\IDE\VSIXInstaller.exe" /quiet /uninstall:LocalAIHub.9f1c4a02-7d3e-4b18-9c55-0a7f2e5b81d4
+& "<VS install dir>\Common7\IDE\VSIXInstaller.exe" /quiet /uninstall:LocalAIHub.9f1c4a02-7d3e-4b18-9c55-0a7f2e5b81d4
 ```
 
-### 验证装好了
+### Verify it loaded
 
-打开工具窗口后应生成 `%TEMP%\LocalAIHub\localaihub.log`，内容含 `LocalAIHubPackage.Initialize 完成`。
+After opening the tool window, `%TEMP%\LocalAIHub\localaihub.log` should appear and contain `LocalAIHubPackage.Initialize 完成`.
 
-> **这是预期行为**：插件刻意**不自动加载**（不设 `AllowsBackgroundLoad`、不注册 MEF），
-> 只在用户点开工具窗口时才实例化 —— 为了不拖慢 VS 启动。
-> 所以在你点开菜单之前，`ActivityLog.xml` 里是**看不到**它的。
+> **This is by design**: the extension deliberately does **not** auto-load (no `AllowsBackgroundLoad`, no MEF components).
+> It is only instantiated when you open the tool window, so it cannot slow down VS startup —
+> which means it will **not** show up in `ActivityLog.xml` until you actually open it.
 
 ---
 
-## 怎么用
+## Usage
 
-1. 确认 Ollama 在跑：`ollama list`
-2. 打开 **工具 → 本地大模型对话(&L)...**
-3. 顶部选模型 → 输入问题 → **Ctrl+Enter** 发送
-4. 想让 Copilot Chat 也能用本地模型：点 **BYOM…** → 注册选中模型 → 重启 VS
+1. Make sure Ollama is running: `ollama list`
+2. Open **Tools → 本地大模型对话(&L)...**
+3. Pick a model, type a question, press **Ctrl+Enter**
+4. To let Copilot Chat use the same local models: click **BYOM…**, select models, register, restart VS
 
-| 界面元素 | 作用 |
+| UI element | Purpose |
 |---|---|
-| 模型下拉框 | 本机已有模型；带 `[常驻显存]` 标记的已在显存里 |
-| 模型管理… | 拉取（带进度）/ 删除 / 预加载常驻 / 卸载 |
-| 联网搜索 + 模式 | `auto 自动` / `always 总是` / `never 从不` |
-| BYOM… | 注册进 Copilot 自带模型，并显示当前配置内容 |
-| 搜索测试… | 只跑搜索链路，不经过模型 |
-| 状态栏 | 每次回答后的 tok/s、首字延迟、prompt token、联网明细 |
-| 运行日志 | 每一步决策的原始日志 |
+| Model dropdown | Local models; `[常驻显存]` marks ones already resident in VRAM |
+| 模型管理… (Model manager) | Pull (with progress) / delete / preload / unload |
+| 联网搜索 + mode | `auto` / `always` / `never` |
+| BYOM… | Register into Copilot BYOM and show the current config |
+| 搜索测试… (Search test) | Run the search chain only, bypassing the model |
+| Status bar | tok/s, first-token latency, prompt tokens, search details per answer |
+| Run log | Raw log of every decision |
 
-### 设置
+### Settings
 
-**工具 → 选项 → Local AI Hub**，或直接编辑 `%LOCALAPPDATA%\LocalAIHub\settings.json`。
+**Tools → Options → Local AI Hub**, or edit `%LOCALAPPDATA%\LocalAIHub\settings.json`.
 
-| 项 | 默认 | 说明 |
+| Setting | Default | Notes |
 |---|---|---|
-| Ollama 地址 | `http://127.0.0.1:11434` | |
-| 搜索模式 | `auto` | `auto` 按问题判定 / `always` / `never` |
-| 相关度阈值 | `0.30`（时效类 `0.15`） | 低于它的结果不注入 |
-| 抓正文硬超时 | `8` 秒 | 防止 DNS 卡住把界面挂住 |
-| 上下文 `num_ctx` | `65536` | 要和 `OLLAMA_CONTEXT_LENGTH` 对齐 |
-| 最大输出 token | `16384` | thinking 模型给小了会正文为空（插件会自动加倍重试一次） |
+| Ollama endpoint | `http://127.0.0.1:11434` | |
+| Search mode | `auto` | `auto` decides per question / `always` / `never` |
+| Relevance threshold | `0.30` (`0.15` for time-sensitive questions) | Results below this are not injected |
+| Page-fetch deadline | `8` s | Prevents a DNS stall from freezing the UI |
+| Context `num_ctx` | `65536` | Keep aligned with `OLLAMA_CONTEXT_LENGTH` |
+| Max output tokens | `16384` | Too low makes thinking models return empty content (the extension auto-retries once with double the budget) |
 | BYOM Base URL | `http://127.0.0.1:11434/v1` | |
 
 ---
 
-## 自己构建
+## Build it yourself
 
-需要 VS 2026（提供 MSBuild 与 VS SDK 程序集）和 .NET SDK。**不需要 NuGet**、不需要联网。
+Requires VS 2026 (provides MSBuild and the VS SDK assemblies) and the .NET SDK. **No NuGet, no network needed.**
 
 ```powershell
-# 1) 逻辑层自测（不需要 VS，110 项）
+# 1) logic self-tests (no VS required, 110 checks)
 dotnet build tools\CoreTests\CoreTests.csproj
 .\tools\CoreTests\bin\Debug\net472\CoreTests.exe
 
-# 2) 构建扩展
+# 2) build the extension
 dotnet build src\LocalAIHub\LocalAIHub.csproj
 
-# 3) 打包 VSIX（含两道校验闸门）
+# 3) package the VSIX (with two validation gates)
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\pack.ps1
 ```
 
-### 为什么是"手工"的
+### Why everything is hand-rolled
 
-本机网络不可达 nuget.org，拿不到 `Microsoft.VSSDK.BuildTools`，所以：
+This machine cannot reach nuget.org, so `Microsoft.VSSDK.BuildTools` is unavailable. Therefore:
 
-- **VS SDK 程序集**直接引用本机 VS 安装目录（`<HintPath>`），不复制进 VSIX（`Private=false`）
-- **JSON** 用手写的 `src/LocalAIHub.Core/Json.cs`（零依赖）
-- **VSIX** 由 `scripts/pack.ps1` 手工封装（zip + `[Content_Types].xml` + 改名 manifest）
-- **菜单/命令/工具窗口**全部由 `LocalAIHub.pkgdef` 手工注册（本机没有 `VSCTCompiler.exe`，所以不用 `.vsct`）
+- **VS SDK assemblies** are referenced straight from the local VS install (`<HintPath>`), not copied into the VSIX (`Private=false`)
+- **JSON** uses the hand-written `src/LocalAIHub.Core/Json.cs` (zero dependencies)
+- **VSIX packaging** is done by `scripts/pack.ps1` (zip + `[Content_Types].xml` + renamed manifest)
+- **Menus/commands/tool window** are registered directly in `LocalAIHub.pkgdef` (no `VSCTCompiler.exe` available offline, so no `.vsct`)
 
-### 两个必须知道的坑（都已在脚本里防住）
+### Two traps you must know (both guarded by the scripts)
 
-1. **`<Prerequisites>` 会让 VSIXInstaller 拒绝整个包**
-   带 `<Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" .../>` 时引擎抛
-   `InvalidExtensionPackageException`（"此文件不是有效的 VSIX 包"）；
-   **只删掉这一个元素、其它一字不改，引擎立刻接受**。
-   而 VS 自带的 `PackageManifestSchema.xsd` 是**允许**它的 —— 所以 schema 校验拦不住。
-   复现工具：`tools/IlProbe`（直接加载 VSIXInstaller 自己用的引擎实现做逐项二分）。
+1. **A `<Prerequisites>` element makes VSIXInstaller reject the whole package.**
+   With `<Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" .../>` present, the engine throws
+   `InvalidExtensionPackageException` ("not a valid VSIX package"). **Deleting only that element, changing
+   nothing else, makes it accept the package immediately.** VS's shipped `PackageManifestSchema.xsd`
+   *allows* it — so schema validation alone cannot catch this.
+   Reproduce with `tools/IlProbe`, which loads VSIXInstaller's own engine and bisects the manifest.
 
-2. **`pack.ps1` 必须保持纯 ASCII**
-   Windows PowerShell 5.1 用 ANSI(GBK) 读 `.ps1`，文件里的中文会让解析器报出毫无关联的语法错误。
+2. **`pack.ps1` must stay pure ASCII.**
+   Windows PowerShell 5.1 reads `.ps1` files using the ANSI codepage (GBK here); non-ASCII source
+   produces bizarre, unrelated parse errors.
 
 ---
 
-## 目录结构
+## Repository layout
 
 ```
 ├─ src/
-│  ├─ LocalAIHub.Core/          # 纯逻辑层，不依赖 VS，可独立测试
-│  │  ├─ Json.cs                #   手写 JSON（零依赖）
-│  │  ├─ HttpFetcher.cs         #   带硬墙钟上限的 HTTP
-│  │  ├─ SearchService.cs       #   Bing/360/百度 解析 + 抓正文
-│  │  ├─ QueryDecision.cs       #   该不该搜 / 检索词抽取
-│  │  ├─ ContextBlocks.cs       #   相关性闸门 + 注入块
-│  │  ├─ OllamaClient.cs        #   Ollama API（流式/拉取/常驻）
-│  │  ├─ ChatPipeline.cs        #   主链路
-│  │  └─ ByomConfig.cs          #   Copilot BYOM 配置读写
-│  └─ LocalAIHub/               # VSIX（net472 + WPF）
-│     ├─ LocalAIHubPackage.cs   #   包入口（最轻量，不自动加载）
-│     ├─ ChatControl.cs         #   聊天界面
-│     ├─ ModelManagerWindow.cs  #   模型管理
-│     ├─ ByomWindow.cs          #   BYOM 注册 + 搜索测试
-│     ├─ HubOptionsPage.cs      #   工具→选项
-│     └─ LocalAIHub.pkgdef      #   手工注册
+│  ├─ LocalAIHub.Core/          # pure logic, no VS dependency, independently testable
+│  │  ├─ Json.cs                #   hand-written JSON (zero dependencies)
+│  │  ├─ HttpFetcher.cs         #   HTTP with a hard wall-clock deadline
+│  │  ├─ SearchService.cs       #   Bing/360/Baidu parsers + page fetching
+│  │  ├─ QueryDecision.cs       #   should-we-search / query extraction
+│  │  ├─ ContextBlocks.cs       #   relevance gate + injection block
+│  │  ├─ OllamaClient.cs        #   Ollama API (streaming/pull/keep-alive)
+│  │  ├─ ChatPipeline.cs        #   the main pipeline
+│  │  └─ ByomConfig.cs          #   Copilot BYOM config read/write
+│  └─ LocalAIHub/               # the VSIX (net472 + WPF)
+│     ├─ LocalAIHubPackage.cs   #   package entry point (minimal, no auto-load)
+│     ├─ ChatControl.cs         #   chat UI
+│     ├─ ModelManagerWindow.cs  #   model manager
+│     ├─ ByomWindow.cs          #   BYOM registration + search test
+│     ├─ HubOptionsPage.cs      #   Tools → Options page
+│     └─ LocalAIHub.pkgdef      #   hand-written registration
 ├─ tools/
-│  ├─ CoreTests/                # 110 项离线自测宿主
-│  └─ IlProbe/                  # VSIX 引擎探针（定位安装被拒的根因）
-├─ scripts/pack.ps1             # 手工 VSIX 打包 + 两道校验闸门
-├─ bench/                       # 本机模型基准测试
-└─ docs/                        # 实测事实、扩展性笔记、交付报告
+│  ├─ CoreTests/                # 110 offline self-tests
+│  └─ IlProbe/                  # VSIX engine probe (found the install rejection cause)
+├─ scripts/pack.ps1             # hand-rolled VSIX packaging + two validation gates
+├─ bench/                       # local model benchmarks
+└─ docs/                        # measured facts, extensibility notes, delivery report
 ```
 
 ---
 
-## 已知限制（诚实清单）
+## Known limitations (honest list)
 
-- 只在 **VS 2026 Insiders 18.11.12224.323** 上构建和验证过。
-- **联网依赖 Bing/360/百度的页面结构**。它们改版时是**降级**（退回通用解析器）而不是崩溃，但可能返回空结果——那时会明确显示"没搜到"。
-- **相关度闸门比的是字面重合度，不是语义**。同义词、整句提问会有假阴性；兜底是"永不滤空 + 低置信度标注"。
-- 百度会限制自动请求，所以排最后。
-- 不支持视觉输入、不支持多模型并发、对话历史不落盘（关掉 VS 就没了）。
-- `thinking` 模型（如 `qwen3:4b`）会先用输出预算思考：插件检测到"思考吃光预算"会自动加倍预算重试一次，但会额外花时间。
-- **BYOM 注册功能未经真实使用验证**：单元测试全部重定向到临时文件（避免污染正在用的 VS 配置），第一次实际使用前会自动备份。
+- Only built and verified on **VS 2026 Insiders 18.11.12224.323**.
+- **Web search depends on Bing/360/Baidu page structure.** When they redesign, the parsers **degrade**
+  to a generic fallback rather than crash — but may return nothing, in which case the plugin says so
+  explicitly rather than pretending it searched.
+- **The relevance gate compares literal overlap, not semantics.** Synonyms and whole-sentence queries
+  can produce false negatives; the fallback is "never return empty + mark as low confidence".
+- Baidu rate-limits automated requests, so it is tried last.
+- No vision input, no concurrent multi-model use, no conversation persistence (closing VS loses history).
+- `thinking` models (e.g. `qwen3:4b`) spend output budget on reasoning first. The extension detects
+  "thinking ate the budget" and retries once with double the budget, but that costs extra time.
+- **The BYOM registration path is not yet verified in real use**: all tests redirect to a temp file to
+  avoid touching a live VS config. It auto-backups before the first real write.
 
-### 环境相关的坑（实测，写脚本的人会用到）
+### Environment traps (measured, useful if you write similar tooling)
 
-- **系统代理会拦 loopback**：本机注册表开了 `127.0.0.1:26561` 代理且**不豁免 localhost**，Python `urllib.getproxies()` 会命中它，导致直连 `127.0.0.1:11434` 全部返回 **404**（ollama CLI 用 Go，默认豁免 localhost 所以正常）。脚本里加 `ProxyHandler({})` 绕过。
-- **`HttpClient`/`urlopen` 的 timeout 不覆盖 DNS 解析**，实测有页面挂 145 秒 → 必须自己加墙钟上限。
+- **A system proxy can capture loopback.** This machine has `127.0.0.1:26561` set as the system proxy
+  **without a loopback exemption**, so Python's `urllib.getproxies()` picks it up and every direct call
+  to `127.0.0.1:11434` returns **404** (the Go-based `ollama` CLI exempts localhost, so it appears fine).
+  Fix: `ProxyHandler({})` in scripts.
+- **`HttpClient` / `urlopen` timeouts do not cover DNS resolution.** One page hung for 145 s in testing,
+  so a wall-clock deadline is mandatory.
 
 ---
 
-## 相关文档
+## Documentation
 
-| 文件 | 内容 |
+| File | Contents |
 |---|---|
-| [docs/SHARED-FACTS.md](docs/SHARED-FACTS.md) | 实测事实（含 BYOM 的 `Endpoint` 枚举真值、VSIX 打包与安装的坑） |
-| [docs/EXTENSIBILITY-NOTES.md](docs/EXTENSIBILITY-NOTES.md) | VS 2026 扩展可行性核实（含 10 条未证实项，都标了出处） |
-| [docs/FINAL-REPORT.md](docs/FINAL-REPORT.md) | 交付报告与验收证据（含失败与纠正记录） |
-| [bench/REPORT.md](bench/REPORT.md) | qwen3-coder:30b 本机基准数据 |
+| [docs/SHARED-FACTS.md](docs/SHARED-FACTS.md) | Measured facts (including the BYOM `Endpoint` enum values and VSIX packaging/install traps) |
+| [docs/EXTENSIBILITY-NOTES.md](docs/EXTENSIBILITY-NOTES.md) | VS 2026 extensibility feasibility review (10 unverified items, each marked with its evidence) |
+| [docs/FINAL-REPORT.md](docs/FINAL-REPORT.md) | Delivery report with acceptance evidence, including failures and corrections |
+| [bench/REPORT.md](bench/REPORT.md) | `qwen3-coder:30b` benchmark numbers on this machine |
 
 ## License
 
-MIT —— 见 [LICENSE](LICENSE)。
-搜索后端会抓取第三方网页，使用前请自行确认符合目标站点的使用条款。
+MIT — see [LICENSE](LICENSE).
+The search backend fetches third-party pages; check that this complies with the target sites' terms of use.
